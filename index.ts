@@ -1,23 +1,23 @@
-import { Message } from "discord.js";
-import { parse } from "node:path";
-
-const axios = require("axios");
-const Discord = require("discord.js");
-const config = require("./config.json");
+import axios, { AxiosRequestConfig } from "axios";
+import * as Discord from "discord.js";
+import * as jsdom from "jsdom";
+import * as config from "./config.json";
 
 const client = new Discord.Client();
 
-const prefix = "!";
-
 client.on("message", function (message) {
+  const prefix = "!";
+
+  // If the author is a bot or if the message doesn't start with the prefix do nothing
   if (message.author.bot) return;
   if (!message.content.startsWith(prefix)) return;
 
   const commandBody = message.content.slice(prefix.length);
   const args = commandBody.split(" ");
-  const command = args.shift().toLowerCase();
+  const command = args.shift()?.toLowerCase();
 
   if (command === "ping") {
+    // Return birthdays
     getBirthdays()
       .then((result) => {
         message.channel.send(`**Birthdays**`);
@@ -26,10 +26,10 @@ client.on("message", function (message) {
         });
       })
       .catch((error) => {
-        message.channel.send(
-          `Something went really wrong...\n\`\`\`${error}\`\`\``
-        );
+        sendErrorMessage(message.channel, error);
       });
+
+    // Return events
     getEvents()
       .then((result) => {
         message.channel.send(`**Events**`);
@@ -38,16 +38,16 @@ client.on("message", function (message) {
         });
       })
       .catch((error) => {
-        message.channel.send(
-          `Something went really wrong...\n\`\`\`${error}\`\`\``
-        );
+        sendErrorMessage(message.channel, error);
       });
+
+    // Send a link to upcoming movies
     message.channel.send(`**Movies link**`);
     message.channel.send("https://www.themoviedb.org/movie/upcoming");
   }
 });
 
-var options = {
+const birthdayRequestOptions: AxiosRequestConfig = {
   method: "GET",
   url: "https://celebrity-bucks.p.rapidapi.com/birthdays/JSON",
   headers: {
@@ -56,25 +56,13 @@ var options = {
   },
 };
 
-function compare(a: any, b: any) {
-  a = parseInt(a.dob.substring(0, 4));
-  b = parseInt(b.dob.substring(0, 4));
-  if (a < b) {
-    return -1;
-  }
-  if (a > b) {
-    return 1;
-  }
-  return 0;
-}
-
 function getBirthdays() {
   return axios
-    .request(options)
+    .request(birthdayRequestOptions)
     .then(function (response) {
-      var filteredResponse = [];
-      const newResponse = response.data.Birthdays.sort(compare);
-      newResponse.forEach((item) => {
+      var filteredResponse: String[] = [];
+      const newResponse = response.data.Birthdays.sort(compareBirthdays);
+      newResponse.forEach((item: { dob: string; name: any }) => {
         const dob = parseInt(item.dob.substring(0, 4));
         if (dob > 1940) {
           filteredResponse.push(`${item.dob.substring(0, 4)}: ${item.name}`);
@@ -87,7 +75,7 @@ function getBirthdays() {
     });
 }
 
-const jsdom = require("jsdom");
+getEvents().then(function (response) {});
 const { JSDOM } = jsdom;
 function getEvents() {
   return axios
@@ -95,7 +83,11 @@ function getEvents() {
     .then(function (response) {
       const dom = new JSDOM(response.data);
       const events = dom.window.document.getElementsByClassName("event");
-      var parsedEvents = [];
+      var parsedEvents: {
+        date: string;
+        string: string;
+        fullString: string;
+      }[] = [];
       var eventStrings = [];
       for (var i = 0; i < events.length; i++) {
         parsedEvents[i] = {};
@@ -106,6 +98,9 @@ function getEvents() {
         parsedEvents[
           i
         ].fullString = `${parsedEvents[i].date}: ${parsedEvents[i].string}`;
+      }
+      parsedEvents = parsedEvents.sort(compareEvents);
+      for (var i = 0; i < events.length; i++) {
         eventStrings.push(
           parsedEvents[i].fullString.replace(/(<([^>]+)>)/gi, "")
         );
@@ -117,7 +112,7 @@ function getEvents() {
     });
 }
 
-function chunkArray(myArray, chunkSize) {
+function chunkArray(myArray: string | any[], chunkSize: number) {
   var index = 0;
   var arrayLength = myArray.length;
   var tempArray = [];
@@ -128,6 +123,37 @@ function chunkArray(myArray, chunkSize) {
   }
 
   return tempArray;
+}
+
+function sendErrorMessage(
+  channel: Discord.TextChannel | Discord.DMChannel | Discord.NewsChannel,
+  error: any
+) {
+  channel.send(`Something went really wrong...\n\`\`\`${error}\`\`\``);
+}
+
+function compareBirthdays(a: { dob: string }, b: { dob: string }) {
+  const aAsInt = parseInt(a.dob.substring(0, 4));
+  const bAsInt = parseInt(b.dob.substring(0, 4));
+  if (aAsInt < bAsInt) {
+    return -1;
+  }
+  if (aAsInt > bAsInt) {
+    return 1;
+  }
+  return 0;
+}
+
+function compareEvents(a: { date: string }, b: { date: string }) {
+  const aAsInt = parseInt(a.date.substring(0, 4));
+  const bAsInt = parseInt(b.date.substring(0, 4));
+  if (aAsInt < bAsInt) {
+    return -1;
+  }
+  if (aAsInt > bAsInt) {
+    return 1;
+  }
+  return 0;
 }
 
 client.login(config.BOT_TOKEN);
