@@ -78,7 +78,7 @@ function getEvents() {
         var parsedEvents = [];
         var eventStrings = [];
         for (var i = 0; i < events.length; i++) {
-            parsedEvents[i] = {};
+            parsedEvents[i] = { date: "", string: "", fullString: "" };
             var dateElement = events[i].getElementsByClassName("date")[0];
             parsedEvents[i].date = dateElement.innerHTML;
             dateElement.remove();
